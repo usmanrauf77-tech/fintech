@@ -1,0 +1,25 @@
+version: 0.2
+
+phases:
+  pre_build:
+    commands:
+      - echo Logging in to Amazon ECR...
+      - aws ecr get-login-password --region $AWS_DEFAULT_REGION | docker login --username AWS --password-stdin $ECR_REPO
+      - COMMIT_HASH=$(echo $CODEBUILD_RESOLVED_SOURCE_VERSION | cut -c 1-7)
+      - IMAGE_TAG=${COMMIT_HASH:=latest}
+      - IMAGE_URI=$ECR_REPO:$IMAGE_TAG
+  build:
+    commands:
+      - echo Building the Docker image...
+      - docker build -t $IMAGE_URI .
+      - echo Pushing the Docker image to ECR...
+      - docker push $IMAGE_URI
+  post_build:
+    commands:
+      - echo Deploying to App Runner service...
+      - aws apprunner update-service --service-arn $APP_RUNNER_SERVICE_ARN --source-configuration ImageRepository={ImageIdentifier=$IMAGE_URI,ImageRepositoryType=ECR}
+      - echo Build and deployment completed successfully.
+
+artifacts:
+  files:
+    - '**/*'
